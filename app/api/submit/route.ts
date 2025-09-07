@@ -1,7 +1,8 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY!;
 
+// Allow CORS for mikeweinberg.com
 const corsHeaders = {
     "Access-Control-Allow-Origin": "https://mikeweinberg.com",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -9,29 +10,25 @@ const corsHeaders = {
 };
 
 export async function OPTIONS() {
-    return new Response(null, { status: 204, headers: corsHeaders });
+    return NextResponse.json({}, { headers: corsHeaders });
 }
 
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const email = body.email;
-        const token = body["g-recaptcha-response"];
-
-        if (!email) {
-            return new Response(
-                JSON.stringify({ success: false, error: "Missing email" }),
-                { status: 400, headers: corsHeaders }
-            );
-        }
+        const { email, "g-recaptcha-response": token } = body as {
+            email: string;
+            "g-recaptcha-response": string;
+        };
 
         if (!token) {
-            return new Response(
-                JSON.stringify({ success: false, error: "Missing captcha token" }),
+            return NextResponse.json(
+                { success: false, error: "Missing captcha token" },
                 { status: 400, headers: corsHeaders }
             );
         }
 
+        // Verify with Google
         const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -41,29 +38,25 @@ export async function POST(request: NextRequest) {
         const verifyData = await verifyRes.json();
 
         if (!verifyData.success) {
-            return new Response(
-                JSON.stringify({
-                    success: false,
-                    error: "Captcha validation failed",
-                    details: verifyData,
-                }),
+            return NextResponse.json(
+                { success: false, error: "Captcha validation failed", details: verifyData },
                 { status: 400, headers: corsHeaders }
             );
         }
 
+        // ✅ At this point captcha is verified
         console.log("Verified Email Submission:", email);
 
-        return new Response(
-            JSON.stringify({ success: true, message: "Captcha passed", email }),
-            { status: 200, headers: corsHeaders }
-        );
-    } catch (err: unknown) {
+        // TODO: Call Keap API here instead of console.log
+
+        return NextResponse.json({ success: true, email }, { headers: corsHeaders });
+    } catch (err) {
         console.error("API error:", err);
-        return new Response(
-            JSON.stringify({
+        return NextResponse.json(
+            {
                 success: false,
                 error: err instanceof Error ? err.message : "Unknown error",
-            }),
+            },
             { status: 500, headers: corsHeaders }
         );
     }
