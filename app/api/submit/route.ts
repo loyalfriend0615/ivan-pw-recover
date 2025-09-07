@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Handle CORS preflight requests
+export async function OPTIONS() {
+    return new NextResponse(null, {
+        status: 200,
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+        },
+    });
+}
+
 export async function POST(request: NextRequest) {
     try {
         const contentType = request.headers.get('content-type') || '';
@@ -17,7 +29,12 @@ export async function POST(request: NextRequest) {
         if (!body || Object.keys(body).length === 0) {
             return NextResponse.json(
                 { error: 'Empty form data' },
-                { status: 400 }
+                {
+                    status: 400,
+                    headers: {
+                        'Access-Control-Allow-Origin': '*',
+                    }
+                }
             );
         }
 
@@ -32,12 +49,21 @@ export async function POST(request: NextRequest) {
             email,
             raw: body,
             timestamp: new Date().toISOString(),
+        }, {
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+            }
         });
     } catch (error) {
         console.error('Error parsing request:', error);
         return NextResponse.json(
             { error: 'Failed to parse request' },
-            { status: 400 }
+            {
+                status: 400,
+                headers: {
+                    'Access-Control-Allow-Origin': '*',
+                }
+            }
         );
     }
 }
