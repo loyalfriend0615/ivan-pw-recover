@@ -1,21 +1,43 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
-const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY!; // add in Vercel env vars
+// 🔑 Make sure you set this in Vercel Environment Variables
+// e.g. RECAPTCHA_SECRET_KEY=your-google-secret-key
+const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY!;
 
+// Reusable CORS headers
+const corsHeaders = {
+    "Access-Control-Allow-Origin": "https://mikeweinberg.com", // <-- WP site
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+// Handle OPTIONS (CORS preflight)
+export async function OPTIONS() {
+    return new Response(null, { status: 204, headers: corsHeaders });
+}
+
+// Handle POST
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
         const email = body.email;
         const token = body["g-recaptcha-response"];
 
-        if (!token) {
-            return NextResponse.json(
-                { success: false, error: "Missing captcha token" },
-                { status: 400 }
+        if (!email) {
+            return new Response(
+                JSON.stringify({ success: false, error: "Missing email" }),
+                { status: 400, headers: corsHeaders }
             );
         }
 
-        // Verify token with Google
+        if (!token) {
+            return new Response(
+                JSON.stringify({ success: false, error: "Missing captcha token" }),
+                { status: 400, headers: corsHeaders }
+            );
+        }
+
+        // 🔍 Verify token with Google
         const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -25,31 +47,29 @@ export async function POST(request: NextRequest) {
         const verifyData = await verifyRes.json();
 
         if (!verifyData.success) {
-            return NextResponse.json(
-                { success: false, error: "Captcha validation failed", details: verifyData },
-                { status: 400 }
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: "Captcha validation failed",
+                    details: verifyData,
+                }),
+                { status: 400, headers: corsHeaders }
             );
         }
 
-        // ✅ Captcha is verified — call Keap API here instead of console.log
+        // ✅ At this point, captcha is verified.
+        // TODO: Forward `email` to Keap API here.
         console.log("Verified Email Submission:", email);
 
-        return NextResponse.json({ success: true, email });
-    } catch (err) {
+        return new Response(
+            JSON.stringify({ success: true, message: "Captcha passed", email }),
+            { status: 200, headers: corsHeaders }
+        );
+    } catch (err: any) {
         console.error("API error:", err);
-        return NextResponse.json(
-            { success: false, error: err instanceof Error ? err.message : "Unknown error" },
-            { status: 500 }
+        return new Response(
+            JSON.stringify({ success: false, error: err.message || "Unknown error" }),
+            { status: 500, headers: corsHeaders }
         );
     }
 }
-
-export async function OPTIONS() {
-    return NextResponse.json({}, { status: 200, headers: corsHeaders });
-}
-
-const corsHeaders = {
-    "Access-Control-Allow-Origin": "https://mikeweinberg.com",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
