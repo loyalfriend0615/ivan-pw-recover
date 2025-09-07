@@ -4,7 +4,7 @@ export async function POST(request: NextRequest) {
     try {
         const contentType = request.headers.get('content-type') || '';
 
-        let body: any = {};
+        let body: Record<string, unknown> = {};
         if (contentType.includes('application/json')) {
             body = await request.json();
         } else if (contentType.includes('application/x-www-form-urlencoded')) {
