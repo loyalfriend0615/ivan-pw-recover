@@ -1,22 +1,17 @@
 import { NextRequest } from "next/server";
 
-// 🔑 Make sure you set this in Vercel Environment Variables
-// e.g. RECAPTCHA_SECRET_KEY=your-google-secret-key
 const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY!;
 
-// Reusable CORS headers
 const corsHeaders = {
-    "Access-Control-Allow-Origin": "https://mikeweinberg.com", // <-- WP site
+    "Access-Control-Allow-Origin": "https://mikeweinberg.com",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-// Handle OPTIONS (CORS preflight)
 export async function OPTIONS() {
     return new Response(null, { status: 204, headers: corsHeaders });
 }
 
-// Handle POST
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
@@ -37,7 +32,6 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 🔍 Verify token with Google
         const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -57,18 +51,19 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // ✅ At this point, captcha is verified.
-        // TODO: Forward `email` to Keap API here.
         console.log("Verified Email Submission:", email);
 
         return new Response(
             JSON.stringify({ success: true, message: "Captcha passed", email }),
             { status: 200, headers: corsHeaders }
         );
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error("API error:", err);
         return new Response(
-            JSON.stringify({ success: false, error: err.message || "Unknown error" }),
+            JSON.stringify({
+                success: false,
+                error: err instanceof Error ? err.message : "Unknown error",
+            }),
             { status: 500, headers: corsHeaders }
         );
     }
