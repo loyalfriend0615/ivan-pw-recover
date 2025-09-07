@@ -1,61 +1,54 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET!; // add to Vercel env vars
+const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY!; // add in Vercel env vars
 
-export async function POST(req: NextRequest) {
-    const corsHeaders = {
-        "Access-Control-Allow-Origin": "https://mikeweinberg.com",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-    };
-
+export async function POST(request: NextRequest) {
     try {
-        const body = await req.formData(); // form POST from HTML
-        const email = body.get("email") as string;
-        const token = body.get("g-recaptcha-response") as string;
+        const body = await request.json();
+        const { email, "g-recaptcha-response": token } = body;
 
         if (!token) {
-            return NextResponse.json({ error: "Missing captcha token" }, { status: 400, headers: corsHeaders });
-        }
-
-        // Verify with Google
-        const verifyRes = await fetch(
-            `https://www.google.com/recaptcha/api/siteverify`,
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: `secret=${RECAPTCHA_SECRET}&response=${token}`,
-            }
-        );
-        const verifyJson = await verifyRes.json();
-
-        if (!verifyJson.success) {
             return NextResponse.json(
-                { error: "Captcha verification failed", details: verifyJson },
-                { status: 400, headers: corsHeaders }
+                { success: false, error: "Missing captcha token" },
+                { status: 400 }
             );
         }
 
-        // ✅ Captcha is valid, now proceed (example: forward to Keap API)
-        // For now, just return success:
-        return NextResponse.json(
-            { success: true, email, message: "Captcha validated, proceed with Keap logic here" },
-            { status: 200, headers: corsHeaders }
-        );
+        // Verify token with Google
+        const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: `secret=${RECAPTCHA_SECRET}&response=${token}`,
+        });
+
+        const verifyData = await verifyRes.json();
+
+        if (!verifyData.success) {
+            return NextResponse.json(
+                { success: false, error: "Captcha validation failed", details: verifyData },
+                { status: 400 }
+            );
+        }
+
+        // ✅ At this point, captcha is verified. You can now call Keap API or just simulate.
+        console.log("Verified Email Submission:", email);
+
+        return NextResponse.json({ success: true, email });
     } catch (err) {
+        console.error("API error:", err);
         return NextResponse.json(
-            { error: "Server error", details: (err as Error).message },
-            { status: 500, headers: corsHeaders }
+            { success: false, error: err instanceof Error ? err.message : "Unknown error" },
+            { status: 500 }
         );
     }
 }
 
 export async function OPTIONS() {
-    return NextResponse.json({}, {
-        status: 200, headers: {
-            "Access-Control-Allow-Origin": "https://mikeweinberg.com",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-        }
-    });
+    return NextResponse.json({}, { status: 200, headers: corsHeaders });
 }
+
+const corsHeaders = {
+    "Access-Control-Allow-Origin": "https://mikeweinberg.com",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
