@@ -5,7 +5,8 @@ const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY!; // add in Vercel env
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { email, "g-recaptcha-response": token } = body;
+        const email = body.email;
+        const token = body["g-recaptcha-response"];
 
         if (!token) {
             return NextResponse.json(
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // ✅ At this point, captcha is verified. You can now call Keap API or just simulate.
+        // ✅ Captcha is verified — call Keap API here instead of console.log
         console.log("Verified Email Submission:", email);
 
         return NextResponse.json({ success: true, email });
