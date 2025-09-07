@@ -2,45 +2,42 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
     try {
-        // Parse the request body
-        const body = await request.json();
+        const contentType = request.headers.get('content-type') || '';
 
-        // Log the received body for debugging
-        console.log('Received POST body:', body);
+        let body: any = {};
+        if (contentType.includes('application/json')) {
+            body = await request.json();
+        } else if (contentType.includes('application/x-www-form-urlencoded')) {
+            const formData = await request.formData();
+            body = Object.fromEntries(formData.entries());
+        }
 
-        // Basic validation - check if body exists
+        console.log('Received body:', body);
+
         if (!body || Object.keys(body).length === 0) {
             return NextResponse.json(
-                { error: 'Request body is empty or invalid' },
+                { error: 'Empty form data' },
                 { status: 400 }
             );
         }
 
-        // Return success response with the received data
+        // ✅ Example: Extract email (your Elementor field name may differ)
+        const email =
+            body['form_fields[inf_field_Email]'] ||
+            body['inf_field_Email'] ||
+            body['email'];
+
         return NextResponse.json({
             success: true,
-            message: 'POST request received successfully',
-            data: body,
-            timestamp: new Date().toISOString()
+            email,
+            raw: body,
+            timestamp: new Date().toISOString(),
         });
-
     } catch (error) {
-        console.error('Error processing POST request:', error);
-
+        console.error('Error parsing request:', error);
         return NextResponse.json(
-            {
-                error: 'Invalid JSON in request body',
-                details: error instanceof Error ? error.message : 'Unknown error'
-            },
+            { error: 'Failed to parse request' },
             { status: 400 }
         );
     }
-}
-
-// Optional: Handle other HTTP methods
-export async function GET() {
-    return NextResponse.json(
-        { message: 'This endpoint only accepts POST requests' },
-        { status: 405 }
-    );
 }
