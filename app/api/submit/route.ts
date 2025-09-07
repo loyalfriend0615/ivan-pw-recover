@@ -1,69 +1,61 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-// Handle CORS preflight requests
-export async function OPTIONS() {
-    return new NextResponse(null, {
-        status: 200,
-        headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
-        },
-    });
-}
+const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET!; // add to Vercel env vars
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
+    const corsHeaders = {
+        "Access-Control-Allow-Origin": "https://mikeweinberg.com",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+    };
+
     try {
-        const contentType = request.headers.get('content-type') || '';
+        const body = await req.formData(); // form POST from HTML
+        const email = body.get("email") as string;
+        const token = body.get("g-recaptcha-response") as string;
 
-        let body: Record<string, unknown> = {};
-        if (contentType.includes('application/json')) {
-            body = await request.json();
-        } else if (contentType.includes('application/x-www-form-urlencoded')) {
-            const formData = await request.formData();
-            body = Object.fromEntries(formData.entries());
+        if (!token) {
+            return NextResponse.json({ error: "Missing captcha token" }, { status: 400, headers: corsHeaders });
         }
 
-        console.log('Received body:', body);
+        // Verify with Google
+        const verifyRes = await fetch(
+            `https://www.google.com/recaptcha/api/siteverify`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: `secret=${RECAPTCHA_SECRET}&response=${token}`,
+            }
+        );
+        const verifyJson = await verifyRes.json();
 
-        if (!body || Object.keys(body).length === 0) {
+        if (!verifyJson.success) {
             return NextResponse.json(
-                { error: 'Empty form data' },
-                {
-                    status: 400,
-                    headers: {
-                        'Access-Control-Allow-Origin': '*',
-                    }
-                }
+                { error: "Captcha verification failed", details: verifyJson },
+                { status: 400, headers: corsHeaders }
             );
         }
 
-        // ✅ Example: Extract email (your Elementor field name may differ)
-        const email =
-            body['form_fields[inf_field_Email]'] ||
-            body['inf_field_Email'] ||
-            body['email'];
-
-        return NextResponse.json({
-            success: true,
-            email,
-            raw: body,
-            timestamp: new Date().toISOString(),
-        }, {
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-            }
-        });
-    } catch (error) {
-        console.error('Error parsing request:', error);
+        // ✅ Captcha is valid, now proceed (example: forward to Keap API)
+        // For now, just return success:
         return NextResponse.json(
-            { error: 'Failed to parse request' },
-            {
-                status: 400,
-                headers: {
-                    'Access-Control-Allow-Origin': '*',
-                }
-            }
+            { success: true, email, message: "Captcha validated, proceed with Keap logic here" },
+            { status: 200, headers: corsHeaders }
+        );
+    } catch (err) {
+        return NextResponse.json(
+            { error: "Server error", details: (err as Error).message },
+            { status: 500, headers: corsHeaders }
         );
     }
+}
+
+export async function OPTIONS() {
+    return NextResponse.json({}, {
+        status: 200, headers: {
+            "Access-Control-Allow-Origin": "https://mikeweinberg.com",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+        }
+    });
 }
