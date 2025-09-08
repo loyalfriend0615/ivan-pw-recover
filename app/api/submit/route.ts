@@ -20,6 +20,8 @@ export async function POST(request: NextRequest) {
             "g-recaptcha-response": string;
         };
 
+        console.log("[DEBUG] Incoming body:", body);
+
         if (!token) {
             return NextResponse.json(
                 { success: false, error: "Missing captcha token" },
@@ -27,13 +29,16 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Verify captcha
+        // ✅ Verify captcha
         const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: `secret=${RECAPTCHA_SECRET}&response=${token}`,
         });
         const verifyData = await verifyRes.json();
+
+        console.log("[DEBUG] Captcha verify response:", verifyData);
+
         if (!verifyData.success) {
             return NextResponse.json(
                 { success: false, error: "Captcha validation failed", details: verifyData },
@@ -41,7 +46,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Submit form to Keap
+        // ✅ Submit to Keap form
         const keapUrl =
             "https://sy659.infusionsoft.com/app/form/process/da2a32de8fba8c9c5001de20b978d852";
 
@@ -53,6 +58,8 @@ export async function POST(request: NextRequest) {
             inf_custom_Honeypot: "null",
         });
 
+        console.log("[DEBUG] Sending to Keap with body:", formBody.toString());
+
         const keapRes = await fetch(keapUrl, {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -61,6 +68,11 @@ export async function POST(request: NextRequest) {
         });
 
         const redirectUrl = keapRes.headers.get("location");
+        const setCookies = keapRes.headers.get("set-cookie");
+
+        console.log("[DEBUG] Keap status:", keapRes.status);
+        console.log("[DEBUG] Keap location:", redirectUrl);
+        console.log("[DEBUG] Keap cookies:", setCookies);
 
         if (keapRes.status === 308 && redirectUrl) {
             return NextResponse.json(
@@ -74,7 +86,7 @@ export async function POST(request: NextRequest) {
             { status: 500, headers: corsHeaders }
         );
     } catch (err) {
-        console.error("API error:", err);
+        console.error("[DEBUG] API error:", err);
         return NextResponse.json(
             { success: false, error: err instanceof Error ? err.message : "Unknown error" },
             { status: 500, headers: corsHeaders }
