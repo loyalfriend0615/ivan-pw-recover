@@ -46,9 +46,10 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 2️⃣ Submit to Keap with a return param
+        // 👇 Add return in the querystring
         const keapFormUrl =
-            "https://sy659.infusionsoft.com/app/form/process/da2a32de8fba8c9c5001de20b978d852";
+            "https://sy659.infusionsoft.com/app/form/process/da2a32de8fba8c9c5001de20b978d852" +
+            "?return=https%3A%2F%2Fmikeweinberg.com%2Fpw-recover%2Fthank-you";
 
         const formBody = new URLSearchParams({
             inf_form_xid: "da2a32de8fba8c9c5001de20b978d852",
@@ -56,9 +57,8 @@ export async function POST(request: NextRequest) {
             infusionsoft_version: "1.70.0.849961",
             inf_field_Email: email,
             inf_custom_Honeypot: "null",
-            // 👇 fake thank-you page (you can style this)
-            return: "https://mikeweinberg.com/pw-recover/thank-you",
         }).toString();
+
 
         const keapRes = await fetch(keapFormUrl, {
             method: "POST",
