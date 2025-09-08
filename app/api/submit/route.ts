@@ -29,11 +29,14 @@ export async function POST(request: NextRequest) {
         }
 
         // Verify captcha
-        const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: `secret=${RECAPTCHA_SECRET}&response=${token}`,
-        });
+        const verifyRes = await fetch(
+            "https://www.google.com/recaptcha/api/siteverify",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: `secret=${RECAPTCHA_SECRET}&response=${token}`,
+            }
+        );
         const verifyData = await verifyRes.json();
 
         if (!verifyData.success) {
@@ -59,16 +62,16 @@ export async function POST(request: NextRequest) {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: formBody.toString(),
-            redirect: "manual", // prevent auto-loop
+            redirect: "manual", // don’t follow automatically
         });
 
         const location = keapRes.headers.get("location");
         console.log("Keap status:", keapRes.status, "Redirect to:", location);
 
         if (keapRes.status === 308 && location) {
-            // Success: Keap accepted submission
+            // Return redirect URL so frontend can finalize
             return NextResponse.json(
-                { success: true, email, keapRedirect: location },
+                { success: true, keapRedirect: location },
                 { headers: corsHeaders }
             );
         }
