@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 2️⃣ Submit to Keap
+        // 2️⃣ Submit to Keap (ONLY ONCE)
         const keapFormUrl =
             "https://sy659.infusionsoft.com/app/form/process/da2a32de8fba8c9c5001de20b978d852";
 
@@ -58,30 +58,16 @@ export async function POST(request: NextRequest) {
             inf_custom_Honeypot: "null",
         }).toString();
 
-        // 🚦 First request: no auto-follow
-        const firstRes = await fetch(keapFormUrl, {
+        const keapRes = await fetch(keapFormUrl, {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: formBody,
-            redirect: "manual",
+            redirect: "manual", // don’t follow 308
         });
 
-        if (firstRes.status === 308 || firstRes.status === 302) {
-            const redirectUrl = firstRes.headers.get("location");
-            console.log("Keap redirecting to:", redirectUrl);
+        console.log("Keap response status:", keapRes.status);
 
-            if (redirectUrl) {
-                const finalRes = await fetch(redirectUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: formBody,
-                });
-
-                const text = await finalRes.text();
-                console.log("Final Keap response snippet:", text.slice(0, 300));
-            }
-        }
-
+        // ✅ At this point, Keap has accepted the submission
         return NextResponse.json(
             { success: true, email },
             { headers: corsHeaders }
