@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY!;
 
+// Allow CORS for mikeweinberg.com
 const corsHeaders = {
     "Access-Control-Allow-Origin": "https://mikeweinberg.com",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -15,7 +16,10 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { email, "g-recaptcha-response": token } = body;
+        const { email, "g-recaptcha-response": token } = body as {
+            email: string;
+            "g-recaptcha-response": string;
+        };
 
         if (!token) {
             return NextResponse.json(
@@ -24,22 +28,26 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 1. Verify captcha
-        const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: `secret=${RECAPTCHA_SECRET}&response=${token}`,
-        });
-
+        // 1. Verify captcha with Google
+        const verifyRes = await fetch(
+            "https://www.google.com/recaptcha/api/siteverify",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: `secret=${RECAPTCHA_SECRET}&response=${token}`,
+            }
+        );
         const verifyData = await verifyRes.json();
+
         if (!verifyData.success) {
+            console.error("Captcha failed:", verifyData);
             return NextResponse.json(
                 { success: false, error: "Captcha validation failed", details: verifyData },
                 { status: 400, headers: corsHeaders }
             );
         }
 
-        // 2. Prepare Keap form body
+        // 2. Prepare Keap form data
         const keapBody = new URLSearchParams({
             inf_form_xid: "da2a32de8fba8c9c5001de20b978d852",
             inf_form_name: "Password Recovery 2025",
@@ -48,32 +56,51 @@ export async function POST(request: NextRequest) {
             inf_custom_Honeypot: "null",
         });
 
-        // 3. Post to Keap with redirect following
+        console.log("Submitting to Keap with body:", keapBody.toString());
+
+        // 3. Post to Keap without following redirects automatically
         const keapRes = await fetch(
             "https://sy659.infusionsoft.com/app/form/process/da2a32de8fba8c9c5001de20b978d852",
             {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: keapBody.toString(),
-                redirect: "follow",   // <-- important: follow the 308 to thank-you page
+                redirect: "manual",
             }
         );
 
-        console.log("Final Keap URL:", keapRes.url);
-        console.log("Final Keap status:", keapRes.status);
+        console.log("Keap initial status:", keapRes.status);
+        const redirectUrl = keapRes.headers.get("location");
+        console.log("Keap location header:", redirectUrl);
 
-        if (keapRes.ok) {
-            return NextResponse.json({ success: true, email }, { headers: corsHeaders });
-        } else {
-            return NextResponse.json(
-                { success: false, error: "Keap submission failed", status: keapRes.status },
-                { status: 500, headers: corsHeaders }
-            );
+        // 4. Follow redirect once manually (Keap needs this to finalize submission)
+        if (
+            (keapRes.status === 308 || keapRes.status === 302) &&
+            redirectUrl
+        ) {
+            const followRes = await fetch(redirectUrl, { method: "GET" });
+            console.log("Followed redirect status:", followRes.status);
+
+            if (followRes.ok) {
+                return NextResponse.json(
+                    { success: true, email },
+                    { headers: corsHeaders }
+                );
+            }
         }
+
+        // 5. Fallback if no success
+        return NextResponse.json(
+            { success: false, error: "Keap submission failed", status: keapRes.status },
+            { status: 500, headers: corsHeaders }
+        );
     } catch (err) {
         console.error("API error:", err);
         return NextResponse.json(
-            { success: false, error: err instanceof Error ? err.message : "Unknown error" },
+            {
+                success: false,
+                error: err instanceof Error ? err.message : "Unknown error",
+            },
             { status: 500, headers: corsHeaders }
         );
     }
