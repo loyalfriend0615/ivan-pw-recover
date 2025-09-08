@@ -56,27 +56,30 @@ export async function POST(request: NextRequest) {
             inf_custom_Honeypot: "null",
         }).toString());
 
-        const keapRes = await fetch(KEAP_FORM_ACTION, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent":
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
-                Referer: "https://mikeweinberg.com/pw-recover",
-            },
-            redirect: "manual", // 👈 prevent infinite redirect loop
-            body: new URLSearchParams({
-                inf_form_xid: "da2a32de8fba8c9c5001de20b978d852",
-                inf_form_name: "Password Recovery 2025",
-                infusionsoft_version: "1.70.0.849961",
-                inf_field_Email: email,
-                inf_custom_Honeypot: "null",
-            }).toString(),
-        });
+        const keapRes = await fetch(
+            "https://sy659.infusionsoft.com/app/form/process/da2a32de8fba8c9c5001de20b978d852",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: new URLSearchParams({
+                    inf_form_xid: "da2a32de8fba8c9c5001de20b978d852",
+                    inf_form_name: "Password Recovery 2025",
+                    infusionsoft_version: "1.70.0.849961",
+                    inf_field_Email: email,
+                    inf_custom_Honeypot: "null",
+                }).toString(),
+                redirect: "follow",   // 👈 let fetch follow redirects
+            }
+        );
 
-        console.log("Keap status:", keapRes.status, keapRes.headers);
+
+        console.log("Final Keap URL:", keapRes.url);
+        console.log("Final status:", keapRes.status);
         const keapText = await keapRes.text();
-        console.log("Keap response body:", keapText.slice(0, 500));
+        console.log("Keap final response snippet:", keapText.slice(0, 300));
+
 
         // If Keap redirects, consider it success (Keap usually redirects to thank-you page)
         if (keapRes.status === 302 || keapRes.status === 303) {
