@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY!;
-const KEAP_FORM_ACTION =
-    "https://sy659.infusionsoft.com/app/form/process/da2a32de8fba8c9c5001de20b978d852";
 
+// Allow CORS for mikeweinberg.com
 const corsHeaders = {
     "Access-Control-Allow-Origin": "https://mikeweinberg.com",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -29,7 +28,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 🔐 Verify reCAPTCHA
+        // 1️⃣ Verify captcha
         const verifyRes = await fetch(
             "https://www.google.com/recaptcha/api/siteverify",
             {
@@ -47,57 +46,53 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 🚀 Forward into Keap
-        console.log("Submitting to Keap with body:", new URLSearchParams({
+        // 2️⃣ Submit to Keap
+        const keapFormUrl =
+            "https://sy659.infusionsoft.com/app/form/process/da2a32de8fba8c9c5001de20b978d852";
+
+        const formBody = new URLSearchParams({
             inf_form_xid: "da2a32de8fba8c9c5001de20b978d852",
             inf_form_name: "Password Recovery 2025",
             infusionsoft_version: "1.70.0.849961",
             inf_field_Email: email,
             inf_custom_Honeypot: "null",
-        }).toString());
+        }).toString();
 
-        const keapRes = await fetch(
-            "https://sy659.infusionsoft.com/app/form/process/da2a32de8fba8c9c5001de20b978d852",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: new URLSearchParams({
-                    inf_form_xid: "da2a32de8fba8c9c5001de20b978d852",
-                    inf_form_name: "Password Recovery 2025",
-                    infusionsoft_version: "1.70.0.849961",
-                    inf_field_Email: email,
-                    inf_custom_Honeypot: "null",
-                }).toString(),
-                redirect: "follow",   // 👈 let fetch follow redirects
+        // 🚦 First request: no auto-follow
+        const firstRes = await fetch(keapFormUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: formBody,
+            redirect: "manual",
+        });
+
+        if (firstRes.status === 308 || firstRes.status === 302) {
+            const redirectUrl = firstRes.headers.get("location");
+            console.log("Keap redirecting to:", redirectUrl);
+
+            if (redirectUrl) {
+                const finalRes = await fetch(redirectUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: formBody,
+                });
+
+                const text = await finalRes.text();
+                console.log("Final Keap response snippet:", text.slice(0, 300));
             }
-        );
-
-
-        console.log("Final Keap URL:", keapRes.url);
-        console.log("Final status:", keapRes.status);
-        const keapText = await keapRes.text();
-        console.log("Keap final response snippet:", keapText.slice(0, 300));
-
-
-        // If Keap redirects, consider it success (Keap usually redirects to thank-you page)
-        if (keapRes.status === 302 || keapRes.status === 303) {
-            return NextResponse.json(
-                { success: true, message: "Keap accepted the submission", email },
-                { headers: corsHeaders }
-            );
         }
 
-        // Otherwise check body
         return NextResponse.json(
-            { success: true, message: "Keap responded", details: keapText.slice(0, 200) },
+            { success: true, email },
             { headers: corsHeaders }
         );
     } catch (err) {
         console.error("API error:", err);
         return NextResponse.json(
-            { success: false, error: err instanceof Error ? err.message : "Unknown error" },
+            {
+                success: false,
+                error: err instanceof Error ? err.message : "Unknown error",
+            },
             { status: 500, headers: corsHeaders }
         );
     }
