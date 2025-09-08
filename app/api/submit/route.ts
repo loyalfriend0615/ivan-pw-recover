@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY!;
 
-// Allow CORS for your site
 const corsHeaders = {
     "Access-Control-Allow-Origin": "https://mikeweinberg.com",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -28,14 +27,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 🔹 Verify reCAPTCHA
+        // Verify captcha
         const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: `secret=${RECAPTCHA_SECRET}&response=${token}`,
         });
         const verifyData = await verifyRes.json();
-
         if (!verifyData.success) {
             return NextResponse.json(
                 { success: false, error: "Captcha validation failed", details: verifyData },
@@ -43,7 +41,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 🔹 Keap endpoint
+        // Submit form to Keap
         const keapUrl =
             "https://sy659.infusionsoft.com/app/form/process/da2a32de8fba8c9c5001de20b978d852";
 
@@ -55,7 +53,6 @@ export async function POST(request: NextRequest) {
             inf_custom_Honeypot: "null",
         });
 
-        // 🔹 Send to Keap in debug mode (don’t auto-follow redirect)
         const keapRes = await fetch(keapUrl, {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -63,26 +60,18 @@ export async function POST(request: NextRequest) {
             redirect: "manual",
         });
 
-        const keapText = await keapRes.text().catch(() => "(no body)");
-        const headersObj: Record<string, string> = {};
-        keapRes.headers.forEach((v, k) => (headersObj[k] = v));
+        const redirectUrl = keapRes.headers.get("location");
 
-        console.log("Keap DEBUG", {
-            status: keapRes.status,
-            headers: headersObj,
-            body: keapText.slice(0, 500), // limit to 500 chars
-        });
+        if (keapRes.status === 308 && redirectUrl) {
+            return NextResponse.json(
+                { success: true, email, keapRedirect: redirectUrl },
+                { headers: corsHeaders }
+            );
+        }
 
         return NextResponse.json(
-            {
-                success: keapRes.status >= 300 && keapRes.status < 400,
-                debug: {
-                    status: keapRes.status,
-                    headers: headersObj,
-                    body: keapText.slice(0, 500), // send first 500 chars for inspection
-                },
-            },
-            { headers: corsHeaders }
+            { success: false, error: "Keap did not accept submission", status: keapRes.status },
+            { status: 500, headers: corsHeaders }
         );
     } catch (err) {
         console.error("API error:", err);
