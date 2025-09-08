@@ -48,6 +48,14 @@ export async function POST(request: NextRequest) {
         }
 
         // 🚀 Forward into Keap
+        console.log("Submitting to Keap with body:", new URLSearchParams({
+            inf_form_xid: "da2a32de8fba8c9c5001de20b978d852",
+            inf_form_name: "Password Recovery 2025",
+            infusionsoft_version: "1.70.0.849961",
+            inf_field_Email: email,
+            inf_custom_Honeypot: "null",
+        }).toString());
+
         const keapRes = await fetch(KEAP_FORM_ACTION, {
             method: "POST",
             headers: {
@@ -66,6 +74,10 @@ export async function POST(request: NextRequest) {
             }).toString(),
         });
 
+        console.log("Keap status:", keapRes.status, keapRes.headers);
+        const keapText = await keapRes.text();
+        console.log("Keap response body:", keapText.slice(0, 500));
+
         // If Keap redirects, consider it success (Keap usually redirects to thank-you page)
         if (keapRes.status === 302 || keapRes.status === 303) {
             return NextResponse.json(
@@ -75,7 +87,6 @@ export async function POST(request: NextRequest) {
         }
 
         // Otherwise check body
-        const keapText = await keapRes.text();
         return NextResponse.json(
             { success: true, message: "Keap responded", details: keapText.slice(0, 200) },
             { headers: corsHeaders }
